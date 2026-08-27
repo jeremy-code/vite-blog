@@ -2,21 +2,14 @@ import { unified } from "unified";
 import remarkParse from "remark-parse";
 import remarkGfm from "remark-gfm";
 import remarkRehype from "remark-rehype";
-import rehypeSanitize, { defaultSchema, type Options } from "rehype-sanitize";
 import rehypeExternalLinks from "rehype-external-links";
 import rehypeSlug from "rehype-slug";
 import { remarkAlert } from "remark-github-blockquote-alert";
 import { defaultHandlers } from "mdast-util-to-hast";
-import deepmerge from "deepmerge";
 
-const sanitizeOptions: Options = deepmerge(defaultSchema, {
-  attributes: {
-    ul: ["className", "list-disc"],
-    ol: ["className", "list-decimal"],
-    code: ["data-language"],
-    "*": ["className"],
-  },
-});
+import styles from "./styles.module.css";
+
+import type { Element } from "hast";
 
 const processor = unified()
   .use(remarkParse)
@@ -35,10 +28,9 @@ const processor = unified()
       list: (state, node) => {
         const listElement = defaultHandlers.list(state, node);
         if (listElement.tagName === "ul") {
-          listElement.properties["className"] = ["list-disc", "list-inside"];
-        }
-        if (listElement.tagName === "ol") {
-          listElement.properties["className"] = ["list-decimal", "list-inside"];
+          listElement.properties.className = ["list-disc", "list-inside"];
+        } else if (listElement.tagName === "ol") {
+          listElement.properties.className = ["list-decimal", "list-inside"];
         }
 
         return listElement;
@@ -65,12 +57,21 @@ const processor = unified()
       },
     },
   })
-  // .use(rehypeSanitize, sanitizeOptions)
   .use(rehypeExternalLinks, { rel: ["nofollow"] })
   .use(rehypeSlug);
 
 const parseMarkdown = (markdown: string) => {
-  return processor.runSync(processor.parse(markdown));
+  const hastTree = processor.runSync(processor.parse(markdown));
+
+  const lastNode = hastTree.children.at(-1);
+
+  if (lastNode?.type === "element" && lastNode.properties["dataFootnotes"]) {
+    lastNode.properties.className = [
+      ...(lastNode.properties.className ?? []),
+      styles.footnotes,
+    ];
+  }
+  return hastTree;
 };
 
 export { parseMarkdown };
